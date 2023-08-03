@@ -1,0 +1,26 @@
+#!/bin/bash
+#
+# separa cada PDF em PNGs
+# melhora contraste
+# reduz o tamanho do arquivo
+# junta tudo num novo PDF
+#
+echo "Bash ${BASH_VERSION}"
+for f in *.pdf; do
+	nome=${f::-4}
+	echo "$nome"
+	mkdir -p "PDFs"
+	mkdir -p "$nome"
+	mkdir -p "$nome/cs"
+	echo "Criando PNGs..."
+	pdftoppm "$f" "$nome/$nome" -png
+	echo "Criando JPGs..."
+	for i in "$nome"/*.png; do
+		i2=${i:7:-4}
+		convert -contrast-stretch 2x0.05% -quality 60% "$i" "$nome/cs/$i2.jpg"
+	done
+	echo "Criando PDF final..."
+	convert "$nome/cs/*.jpg" "PDFs/$nome.pdf"
+	rm "$nome"/cs/*.jpg && rmdir "$nome/cs"
+	rm "$nome"/*.png && rmdir "$nome"
+done

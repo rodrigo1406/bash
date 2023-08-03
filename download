@@ -1,0 +1,14 @@
+#!/bin/bash
+echo "Bash versão ${BASH_VERSION}..."
+for lat in {14..22}
+do
+	for j in {27..35}
+	do
+		lon=$((15*j))
+		if [[ $((lon % 10)) -eq 0 ]]
+		then
+			lon=${lon::-1}_
+		fi
+		wget "http://www.dsr.inpe.br/topodata/data/geotiff/$lat""S""$lon""ZN.zip"
+	done
+done

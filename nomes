@@ -1,0 +1,21 @@
+#!/bin/bash
+#
+# script para organizar prints do celular segundo o aplicativo onde foram tirados
+# rode numa pasta cheia de arquivos .jpg
+#
+# cada arquivo deverá ter um nome parecido com
+# Screenshot_2021-08-12-23-49-42-767_com.whatsapp.jpg
+#
+# o script seleciona o texto depois do último _, neste caso "com.whatsapp.jpg"
+# será criada uma pasta com este nome, e todas as imagens com esta terminação (com.whatsapp.jpg) serão movidas para esta pasta
+#
+echo "Bash ${BASH_VERSION}"
+for f in *.jpg; do
+	if [ -f "$f" ]; then # se é um arquivo
+		l=$(echo "$f" | grep -oP "(?<=_)(?:.(?!_))+$")
+		if [ ! -d "$l" ]; then # se não existe esse diretório, cria
+			mkdir -v "$l"
+		fi
+		mv "$f" "$l/$f"
+	fi
+done
