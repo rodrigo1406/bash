@@ -1,0 +1,77 @@
+#!/bin/bash
+echo "Bash ${BASH_VERSION}"
+echo "Uso:"
+echo "	vidMin			gera 30 miniaturas (5x6) por vídeo"
+echo "	vidMin N		gera N miniaturas (5x6 ou auto-ajuste) por vídeo"
+echo "	vidMin N X Y		gera N miniaturas (XxY) por vídeo"
+trap 'echo " Ctrl+C, saindo."; exit' SIGINT # permite sair usando Ctrl+C
+mkdir -p mini # cria o diretório 'mini', se não existir ainda
+# DEFINE OS PARÂMETROS
+x=5
+y=6
+if [ $# -eq 0 ] || ! [[ $1 =~ ^[0-9]+$ ]]; then # se não tem parâmetros, ou o primeiro parâmetro não é número inteiro
+	num=30 # nenhum parâmetro: 30 miniaturas
+else
+	num=$1 # primeiro parâmetro é o número de miniaturas de cada vídeo
+	if [ $# -eq 3 ] && [[ $2 =~ ^[0-9]+$ ]] && [[ $3 =~ ^[0-9]+$ ]]; then # se tiver 3 parâmetros, e 2º e 3º também forem números inteiros
+		x=$2 # segundo parâmetro é o número de miniaturas por linha
+		y=$3 # terceiro parâmetro é o número de linhas
+	elif [ $num -gt 30 ]; then
+		x=$(perl -e "print int(sqrt($num))") # número de miniaturas por linha
+		y=$((num / x)) # número de linhas
+		if [ $((x * y)) -lt $num ]; then
+			y=$((y+1))
+		fi
+	fi
+fi
+# GERA AS MINIATURAS
+echo "Gerando $num ($x"x"$y) miniaturas por vídeo..."
+while IFS= read -r -d $'' f; do # IFS = Internal Field Separator, transformado em '' (ou \0, fim do texto), para separar os diferentes arquivos obtidos pelo 'find' no fim do loop (após 'done')
+	# f = "./1979 Alien/Alien (1979).mp4"
+	if ! [[ "$f" =~ ^\./mini/.* ]] && [[ $(file -b --mime-type "$f") =~ video/.* ]]; then # se 'f' está fora de 'mini' e é um arquivo de vídeo
+		f=${f:2}
+		f2=${f//\//_} # substitui / por _ pro nome das montagens
+		if [ ! -f "mini/$f2.jpg" ]; then # se 'f2' ainda não foi criado (não processa de novo um filme já processado)
+			echo "$f"
+			mkdir -p "mini/$f" # cria o diretório 'f' dentro de 'mini'
+			numf=$(ls -1 "mini/$f" | wc -l) # número de arquivos no diretório 'mini/f'
+			if [ $num -lt $numf ]; then # se o número de miniaturas a gerar for menor que o número existente, apaga tudo pra refazer
+				rm -f "mini/$f/"*
+			fi
+			#dur=$(ffprobe -i "$f" -show_entries format=duration -v quiet -of csv="p=0") # duração do vídeo em segundos
+			dur=$(mediainfo --Inform="Video;%Duration%" "$f") # duração do vídeo em ms
+			dur=${dur%.*} # converte pra inteiro
+			dur=$((dur / 1000)) # duração em segundos
+			#echo $dur
+			if [ $dur == "N/A" ]; then
+				printf "\033[1;31m	Arquivo '$f' inválido\033[0m\n"
+				continue
+			elif [ $dur -lt 10 ]; then
+				printf "\033[1;31m	Arquivo '$f' muito curto (< 10 segundos)\033[0m\n"
+				continue
+			fi
+			hor=$((dur / 3600)) # horas
+			min=$((dur %3600 / 60)) # minutos
+			min=$(printf "%02d" $min) # minutos com dois dígitos
+			seg=$((dur % 60)) # segundos
+			seg=$(printf "%02d" $seg) # segundos com dois dígitos
+			frm=$((dur / (num + 1))) # intervalo entre os frames (+1 pra não pegar um frame no fim do vídeo)
+			for i in $(seq 1 $num); do
+				pos=$((frm * i))
+				i2=$(printf "%02d" $i)
+				if [ $num -eq $numf ]; then
+					ffmpeg -nostdin -loglevel quiet -n -ss $pos -i "$f" -vf scale=320:-1 -frames:v 1 "mini/$f/capture-$i2.jpg" # -n não sobrescreve miniaturas, número igual ao existente
+				else
+					ffmpeg -nostdin -loglevel quiet -y -ss $pos -i "$f" -vf scale=320:-1 -frames:v 1 "mini/$f/capture-$i2.jpg" # -y sobrescreve miniaturas, número diferente
+				fi
+			done
+			numf=$(ls -1 "mini/$f" | wc -l) # número de arquivos no diretório 'mini/f' (vê se deu certo)
+			if [ $numf -gt 0 ]; then # se deu certo
+				# junta as miniaturas numa imagem só, em 'mini'
+				montage -pointsize 10 -title "$f $hor:$min:$seg" -tile "$x"x"$y"  -geometry +"$x"+"$y" "mini/$f/"capture*.jpg "mini/$f2.jpg"
+			else # se deu errado
+				printf "\033[1;31m	Erro ao processar '$f'\033[0m\n"
+			fi
+		fi
+	fi
+done < <(find . -type f -print0 | sort -z)
